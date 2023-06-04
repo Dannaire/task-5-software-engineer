@@ -1,56 +1,53 @@
 using Customer_Api.Data;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
 using Serilog;
-using Serilog.Events;
 
-public class Program
-{
-    public static void Main(string[] args)
-    {
-        Log.Logger = new LoggerConfiguration()
+var builder = WebApplication.CreateBuilder(args);
+
+Log.Logger = new LoggerConfiguration()
             .MinimumLevel.Information()
             .WriteTo.Console()
-            .WriteTo.File("log.txt", rollingInterval: RollingInterval.Day, rollOnFileSizeLimit: true)
+            .WriteTo.File("log.txt",
+                rollingInterval: RollingInterval.Day,
+                rollOnFileSizeLimit: true)
             .CreateLogger();
 
-        Log.Information("Starting up");
+Log.CloseAndFlush();
 
-        var host = CreateHostBuilder(args).Build();
 
-        using (var scope = host.Services.CreateScope())
-        {
-            var services = scope.ServiceProvider;
-            try
-            {
-                var dbContext = services.GetRequiredService<CustomerDb>();
-                // Apply any pending migrations
-                dbContext.Database.Migrate();
-            }
-            catch (Exception ex)
-            {
-                Log.Fatal(ex, "An error occurred while migrating or seeding the database.");
-                return;
-            }
-        }
+// Add services to the container.
+var services = builder.Services;
+services.AddEndpointsApiExplorer();
+services.AddSwaggerGen();
 
-        host.Run();
-    }
+builder.Services.AddControllersWithViews();
+// Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 
-    public static IHostBuilder CreateHostBuilder(string[] args) =>
-        Host.CreateDefaultBuilder(args)
-            .UseSerilog()
-            .ConfigureServices((hostContext, services) =>
-            {
-                services.AddDbContext<CustomerDb>(options =>
-                {
-                    options.UseNpgsql(hostContext.Configuration.GetConnectionString("DefaultConnection"));
-                });
+builder.Services.AddDbContext<CustomerDb>(options =>
+{
+    options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection"));
+});
 
-                services.AddScoped<ICustomerService, CustomerService>();
+var app = builder.Build();
 
-                services.AddControllersWithViews();
-                services.AddRazorPages();
-            });
+
+// Configure the HTTP request pipeline.
+if (app.Environment.IsDevelopment())
+{
+    app.UseExceptionHandler("/Home/Error");
+    app.UseHsts();
+
 }
+
+app.UseSwagger();
+app.UseSwaggerUI();
+
+app.UseHttpsRedirection();
+app.UseStaticFiles();
+
+app.UseAuthorization();
+
+app.MapControllerRoute(
+   name: "default",
+   pattern: "{controller=Customers}/{action=Index}/{id?}");
+app.Run();
